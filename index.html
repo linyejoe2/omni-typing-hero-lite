@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Omni Typing HERO - LITE</title>
+  <title>Omni Typing HERO - Lite</title>
   <style>
     body {
       background-color: #0f141a;
@@ -48,6 +48,18 @@
   <div class="instructions">請輸入咒語攻擊，打錯字會激怒妖怪！</div>
 
   <script>
+    /**
+     * 遊戲配置
+     */
+    const CONFIG = {
+      width: 600,
+      height: 600,
+      pixelSize: 4,
+      monsterMaxHP: 10,
+      maxHearts: 3,
+      rageThreshold: 5, // 打錯 5 次觸發反擊
+      groundY: 320
+    };
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -163,7 +175,22 @@
       draw() { ctx.fillStyle = "#ffd700"; ctx.fillRect(this.x, this.y, 8, 8); }
     }
 
-
+    /**
+     * 邏輯函數
+     */
+    async function fetchNewWord() {
+      gameState.isLoading = true;
+      try {
+        const response = await fetch('https://random-word-api.herokuapp.com/word?number=1');
+        const data = await response.json();
+        gameState.currentWord = data[0].toUpperCase();
+        gameState.typedIndex = 0;
+      } catch (e) {
+        gameState.currentWord = "SYSTEM";
+        gameState.typedIndex = 0;
+      }
+      gameState.isLoading = false;
+    }
 
     function drawMonster() {
       const m = gameState.monster;
@@ -192,7 +219,97 @@
       ctx.restore();
     }
 
-    
+    /**
+ * 繪製環境與 UI
+ */
+    function drawEnvironment() {
+      // 地面
+      ctx.fillStyle = "#0a0a0a";
+      ctx.fillRect(0, CONFIG.groundY, 600, 300);
+
+      // 日式鳥居裝飾線
+      ctx.fillStyle = "#8b0000";
+      ctx.fillRect(0, 400, 600, 8); // 橫樑
+      ctx.fillRect(50, 400, 20, 200); // 柱子左
+      ctx.fillRect(530, 400, 20, 200); // 柱子右
+
+      // 金幣與血條
+      ctx.fillStyle = "#d4af37";
+      ctx.font = "20px 'Courier New'";
+      ctx.textAlign = "left";
+      ctx.fillText(`KOBAN: ${gameState.gold}`, 30, 40);
+
+      // 血條
+      const bw = 200;
+      ctx.fillStyle = "#333";
+      ctx.fillRect(370, 25, bw, 15);
+      ctx.fillStyle = "#ff4500";
+      ctx.fillRect(370, 25, (gameState.monster.hp / CONFIG.monsterMaxHP) * bw, 15);
+      ctx.strokeStyle = "#d4af37";
+      ctx.strokeRect(370, 25, bw, 15);
+    }
+
+    function drawUI() {
+      // 生命值 (心形)
+      for (let i = 0; i < CONFIG.maxHearts; i++) {
+        ctx.fillStyle = i < gameState.hearts ? "#ff4444" : "#333";
+        // 畫一個簡單的像素心
+        const hX = 30 + i * 35;
+        const hY = 70;
+        ctx.fillRect(hX, hY, 10, 10);
+        ctx.fillRect(hX - 5, hY - 5, 10, 10);
+        ctx.fillRect(hX + 5, hY - 5, 10, 10);
+      }
+
+      ctx.fillStyle = "#d4af37"; ctx.font = "20px 'Courier New'"; ctx.textAlign = "left";
+      ctx.fillText(`KOBAN: ${gameState.gold}`, 30, 40);
+
+      // 怪物的血條與反擊條
+      const bw = 200;
+      // HP Bar
+      ctx.fillStyle = "#333"; ctx.fillRect(370, 25, bw, 12);
+      ctx.fillStyle = "#ff4500"; ctx.fillRect(370, 25, (gameState.monster.hp / CONFIG.monsterMaxHP) * bw, 12);
+      // Rage Bar (反擊值)
+      ctx.fillStyle = "#222"; ctx.fillRect(370, 42, bw, 6);
+      ctx.fillStyle = "#9400d3"; ctx.fillRect(370, 42, (gameState.monster.rage / CONFIG.rageThreshold) * bw, 6);
+      ctx.strokeStyle = "#d4af37"; ctx.strokeRect(370, 25, bw, 23);
+
+      // 單字
+      if (!gameState.isGameOver) {
+        ctx.textAlign = "center"; ctx.font = "bold 40px 'Courier New'";
+        const word = gameState.currentWord;
+        const startX = 300 - (word.length * 28) / 2;
+        for (let i = 0; i < word.length; i++) {
+          ctx.fillStyle = i < gameState.typedIndex ? "#ff4500" : "#555";
+          ctx.fillText(word[i], startX + i * 28, 380);
+        }
+      } else {
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0, 0, 600, 600);
+        ctx.fillStyle = "#ff0000"; ctx.font = "bold 60px 'Courier New'"; ctx.textAlign = "center";
+        ctx.fillText("戰死沙場", 300, 250);
+        ctx.fillStyle = "#fff"; ctx.font = "20px 'Courier New'";
+        ctx.fillText("按下任何鍵重新開始", 300, 320);
+      }
+
+      // 鍵盤區
+      const rows = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+      rows.forEach((row, rIdx) => {
+        const xStart = 300 - (row.length * 45) / 2;
+        for (let i = 0; i < row.length; i++) {
+          const char = row[i];
+          const isPressed = gameState.lastKeyPressed === char;
+          const x = xStart + i * 45;
+          const y = 450 + rIdx * 45;
+          ctx.fillStyle = isPressed ? "#ff4500" : "#1a1a1a";
+          ctx.fillRect(x, y, 35, 35);
+          ctx.strokeStyle = "#8b0000";
+          ctx.strokeRect(x, y, 35, 35);
+          ctx.fillStyle = "#fff";
+          ctx.font = "14px Arial";
+          ctx.fillText(char, x + 17.5, y + 22);
+        }
+      });
+    }
 
     function update() {
       if (gameState.isGameOver) return;
@@ -243,7 +360,7 @@
       // 鳥居裝飾
       ctx.fillStyle = "#8b0000"; ctx.fillRect(0, 400, 600, 8);
       ctx.fillRect(50, 400, 20, 200); ctx.fillRect(530, 400, 20, 200);
-
+      // drawEnvironment()
       drawUI();
       requestAnimationFrame(draw);
     }
